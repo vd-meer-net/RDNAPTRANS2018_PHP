@@ -3,9 +3,9 @@
 if (isset($_REQUEST['m'])) {
     include 'rdnaptrans.php';
     if ($_REQUEST['m']==1) {
-        var_dump(rd2etrs(array('x'=>108360.87902938,'y'=>415757.27450621,'h'=>258.00566518823), true));
+        var_dump(rd2etrs(array('x'=>108360.87902938,'y'=>415757.27450621,'h'=>258.00566518823)));
     } elseif ($_REQUEST['m']==2) {
-        var_dump(etrs2rd(array('lat'=>53.473095072,'lon'=>6.886681267,'h'=>290.4741), true));
+        var_dump(etrs2rd(array('lat'=>53.473095072,'lon'=>6.886681267,'h'=>290.4741)));
     } elseif ($_REQUEST['m']==3) {
         SelfValidation();
     } elseif ($_REQUEST['m']==4) {

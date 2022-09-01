@@ -43,7 +43,7 @@ function prefillCache() {
  * etrs2rd
  *
  * @param  array $etrs
- * @return arrat $rd
+ * @return array $rd
  */
 function etrs2rd($etrs) {
     $grs80=array('a'=>6378137,'f'=>1/298.257222101,'h'=>43);
