@@ -47,8 +47,8 @@ function ValidateRD2ETRS() {
             echo 'point_id  latitude        longitude    height'."\r\n";
         } else {
             $etrs=rd2etrs(array('x'=>$x,'y'=>$y,'h'=>$h));
-            if ($h == 0) {
-                printf("%8s  %12.9f   %12.9f NaN"."\r\n",$name,$etrs['lat'],$etrs['lon']);
+            if (is_nan($etrs['h'])) {
+                printf("%8s  %12.9f   %12.9f       NaN"."\r\n",$name,$etrs['lat'],$etrs['lon']);
             } else {
                 printf("%8s  %12.9f   %12.9f %9.4f"."\r\n",$name,$etrs['lat'],$etrs['lon'],$etrs['h']);
             }
@@ -75,8 +75,8 @@ function ValidateETRS2RD() {
             echo 'point_id  x_coordinate  y_coordinate height'."\r\n";
         } else {
             $rd=etrs2rd(array('lat'=>$lat,'lon'=>$lon,'h'=>$h));
-            if ($rd['z'] == 0) {
-                printf("%8s  %12.4f  %12.4f NaN"."\r\n",$name,$rd['x'],$rd['y']);
+            if (is_nan($rd['z'])) {
+                printf("%8s  %12.4f  %12.4f        NaN"."\r\n",$name,$rd['x'],$rd['y']);
             } else {
                 printf("%8s  %12.4f  %12.4f  %9.4f"."\r\n",$name,$rd['x'],$rd['y'],$rd['z']);
             }

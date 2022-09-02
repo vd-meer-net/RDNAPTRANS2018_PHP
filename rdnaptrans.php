@@ -104,7 +104,7 @@ function rd2etrs($rd) {
 
     $etrs_deg['h']=$rd['h'];
     $etrs_deg['h']=NAP_Correction($etrs_deg,false);
-  
+    
     return $etrs_deg;
 }
 
@@ -447,7 +447,7 @@ function NAP_Correction($pos, $ETRS89toRD=true) {
     if (isset($pos['h'])) {
         $height=$pos['h'];
     } else {
-        $height=null;
+        return NAN;
     }
 
     $phi_min = 50; 
@@ -478,22 +478,13 @@ function NAP_Correction($pos, $ETRS89toRD=true) {
 
         $etrs89_quasi_height = ($phinorm - floor($phinorm)) * (($nw_height*(floor($labdanorm) + 1 - $labdanorm)) + $ne_height*($labdanorm - floor($labdanorm))) + (floor($phinorm) + 1 - $phinorm) * (($sw_height*(floor($labdanorm) + 1 - $labdanorm)) + $se_height*($labdanorm - floor($labdanorm)));
     } else {
-        $etrs89_quasi_height = null;
+        return NAN;
     }
     if ($ETRS89toRD) {
-        if ($etrs89_quasi_height !== null ) { 
-            $result = $height - $etrs89_quasi_height;
-        } else { 
-            $result = null;
-        }
+        return $height - $etrs89_quasi_height;
     } else {
-        if ($etrs89_quasi_height !== null ) { 
-            $result = $height + $etrs89_quasi_height;
-        } else { 
-            $result = null;
-        }
+        return $height + $etrs89_quasi_height;
     }
-    return $result;
 } //NAP_Correction;
 
 /**
