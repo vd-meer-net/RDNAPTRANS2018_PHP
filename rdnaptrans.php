@@ -1,8 +1,33 @@
 <?php
-$GLOBALS['correctionCache']=array();
-prefillCache();
+/**
+ * rdnaptrans.php
+ * 
+ * This program is officially validated and may carry the following trademark: RDNAPTRANS™2018
+ * It is a combination of two php functionthat performs RD NAP -> ETRS89 transformations or v.v.
+ * Coordinate transformation to and from Stelsel van de Rijksdriehoeksmeting and Normaal Amsterdams Peil.
+ * - etrs2rd(): Transformation from ETRS89 to RD.
+ * - rd2etrs():Transformation from RD to ETRS89 (called the inverse transformation).
+ * 
+ * This implementation follows the flow as described in the RDNAPTRANS2018-document found at www.nsgi.nl
+ * 
+ * As a kind of bonus the transformation from ETRS89 to ITRS2014 and v.v. is also included.
+ * 
+ * I would like to thank Jochem Lesparre from the Netherlands Kadaster/NSGI for his kind help with finding the bugs.  
+ */
 
+$GLOBALS['correctionCache']=array();
+
+
+/**
+ * prefillCache
+ * 
+ * Reads the complete correctiongrid and the height-matrix into the global-variable.
+ *
+ * @return void
+ */
 function prefillCache() {
+    if (count($GLOBALS['correctionCache']) == 144782) { return; }
+
     //ETRS89_lat_(deg)	ETRS89_lon_(deg)	NAP_quasi_geoid_height_above_ETRS89_ellipsoid_(m)
     //50.0000	2.0000	44.6078
 
@@ -41,14 +66,24 @@ function prefillCache() {
   
 /**
  * etrs2rd
+ * 
+ * Performs the calculation from ETRD89 to RD.
  *
- * @param  array $etrs
- * @return array $rd
+ * @param  array $etrs   Array with the following keys:
+ *      lat latitude in decimal degrees
+ *      lon longitude in decimal degrees
+ *      h   height in meters (optional)
+ * @return array $rd    Array with the following keys:
+ *      x   x-value of the location in meters
+ *      y   y-value of the location in meters
+ *      h   height in meters (no height given returns NaN)
  */
 function etrs2rd($etrs) {
+    prefillCache();
+
     $grs80=array('a'=>6378137,'f'=>1/298.257222101,'h'=>43);
     $bessel1841=array('a'=>6377397.155,'f'=>1/299.1528128);
-    $etrs2rd=array('tx'=>-565.7346,'ty'=>-50.4058,'tz'=>-465.2895,'rx'=>-1.9151255475293E-6,'ry'=>1.6036473018269E-6,'rz'=>-9.0954585716021E-6,'s'=>-4.07242E-6);
+    $etrs2rd=array('tx'=>-565.7346,'ty'=>-50.4058,'tz'=>-465.2895,'rx'=>-0.395023,'ry'=>0.330776,'rz'=>-1.876073,'s'=>-4.07242E-6);
     $rdmap=array('latc'=>deg_to_rad1(52.156160556),'lonc'=>deg_to_rad1(5.387638889),'k'=>0.9999079,'x0'=>155000,'y0'=>463000, 'ellips'=>$bessel1841);
 
     $radian=deg_to_rad($etrs);
@@ -76,15 +111,24 @@ function etrs2rd($etrs) {
 
 /**
  * rd2etrs
+ * 
+ * Performs the calculation from RD to ETRD89.
  *
- * @param  array $rd
- * @return void
+ * @param array $rd    Array with the following keys:
+ *      x   x-value of the location in meters
+ *      y   y-value of the location in meters
+ *      h   height in meters (optional)
+ * @return  array $etrs   Array with the following keys:
+ *      lat latitude in decimal degrees
+ *      lon longitude in decimal degrees
+ *      h   height in meters (no height given returns NaN)
  */
 function rd2etrs($rd) {
+    prefillCache();
     $grs80=array('a'=>6378137,'f'=>1/298.257222101,'h'=>43);
     $bessel1841=array('a'=>6377397.155,'f'=>1/299.1528128,'h'=>0);
     $rdmap=array('latc'=>deg_to_rad1(52.156160556),'lonc'=>deg_to_rad1(5.387638889),'k'=>0.9999079,'x0'=>155000,'y0'=>463000, 'ellips'=>$bessel1841);
-    $rd2etrs=array('tx'=>565.7381,'ty'=>50.4018,'tz'=>465.2904,'rx'=>1.915140091939E-6,'ry'=>-1.603627909279E-6,'rz'=>9.095463419738E-6,'s'=>4.07242E-6);
+    $rd2etrs=array('tx'=>565.7381,'ty'=>50.4018,'tz'=>465.2904,'rx'=>0.395026,'ry'=>-0.330772,'rz'=>1.876074,'s'=>4.07242E-6);
 
     $rd_real_bessel_rad=rd_to_ellips($rd, $rdmap);
 
@@ -109,10 +153,77 @@ function rd2etrs($rd) {
 }
 
 /**
+ * ITRS2ETRS89
+ *
+ * Performs the calculation from ITRS to ETRS89 (or the inverse).
+ *
+ * @param  array $pos   Array with the following keys:
+ *      lat latitude in decimal degrees
+ *      lon longitude in decimal degrees
+ *      h   height in meters (optional, if not given h=0)
+ * 
+ * @param  boolean $inverse  If true inverses the calculation
+ * @param  mixed $date Date to be used in the calcution. 
+ *      Could be a DateTime-object or a string containg a date 
+ * @return array
+ *      lat latitude in decimal degrees
+ *      lon longitude in decimal degrees
+ *      h   height in meters
+ */
+function ITRS2ETRS89($pos, $inverse=false, $date=null) {
+    $grs80=array('a'=>6378137,'f'=>1/298.257222101,'h'=>43);
+
+    $itrf2014=array('tx'=>0.0547,'ty'=>0.0522,'tz'=>-0.0741,'rx'=>-0.001701,'ry'=>-0.010290,'rz'=>+0.016632,'s'=>+0.00000000212);
+    $itrf2014_rate=array('tx'=>0.00010,'ty'=>0.00010,'tz'=>-0.00190,'rx'=>-0.0000810,'ry'=>-0.0004900,'rz'=>+0.0007920,'s'=>+0.000000000110);
+
+    $pos=deg_to_rad($pos);
+
+    $phi=$pos['lat'];
+    $labda=$pos['lon'];
+    $h=0;
+    if (isset($pos['h'])) {
+        $h=$pos['h'];
+        $grs80['h']=$h;
+    }
+
+    $phi1 = $phi;
+    
+    $geoc=ellips_to_geoc($pos, $grs80);
+
+    if (gettype($date)=='string') {
+        $date=date_create($date);
+    }
+
+    if ($date === null || !($date instanceof DateTime)) {
+        $date=new datetime();
+    }
+
+    $t_epoch=2010;
+    $t=$date->format("Y")+round($date->format('z')/366,2);
+
+    $wgs2itrf=helmert_apply_rate($itrf2014, $itrf2014_rate, $t-$t_epoch);
+
+    if ($inverse) {
+        $wgs2itrf=inverse_helmert_param($wgs2itrf);
+    }
+
+    $helmert=helmert($geoc, $wgs2itrf);
+
+    $grs80=array('a'=>6378137,'f'=>1/298.257222101,'h'=>43);
+    $ellips=geoc_to_ellips($helmert, $grs80);
+
+    return rad_to_deg($ellips);
+} 
+
+/**
  * inverse_RD_Correction
  *
  * @param  array Geographic ellipsoidal real Bessel in degrees 
+ *      lat latitude in decimal degrees
+ *      lon longitude in decimal degrees
  * @return array Geographic ellipsoidal pseudo Bessel in decimal degrees.
+ *      lat latitude in decimal degrees
+ *      lon longitude in decimal degrees
  */
 function inverse_RD_Correction($pos) {
     $phi = $pos['lat'];        // in degrees;
@@ -176,6 +287,8 @@ function inverse_RD_Correction($pos) {
  *
  * @param  array RD X coordinate in meter
  * @param  array Geographic ellipsoidal real Bessel latitude in radian
+ *      lat latitude in radian
+ *      lon longitude in radian
  * @return void
  */
 function rd_to_ellips($rd,$map) {
@@ -259,6 +372,30 @@ function rd_to_ellips($rd,$map) {
     return array('lat'=>$phi1, 'lon'=>$labda);
 } // rd_to_ellips
 
+/**
+ * getRdCorrection
+ *
+ * @param  mixed $lat
+ * @param  mixed $lon
+ * @param  mixed $offsetx
+ * @param  mixed $offsety
+ * @return void
+ */
+function getRdCorrection($lat, $lon, $offsetx=null, $offsety=null) {
+    $LatInt=floor($lat/0.0125)*125;
+    $LonInt=floor($lon/0.02)*200;
+
+    if ($offsetx !== null && $offsetx !== 0) {$LatInt+=125;}
+    if ($offsety !== null && $offsety !== 0) {$LonInt+=200;}
+
+    if ($LatInt <500000 || $LatInt>560000 ) return array('LatCor'=>0,'LatCor'=>0, 'Height'=>null);
+    if ($LonInt < 20000 || $LonInt> 80000 ) return array('LatCor'=>0,'LatCor'=>0, 'Height'=>null);
+
+
+    if ( array_key_exists($LatInt.$LonInt, $GLOBALS['correctionCache'])) {
+        return $GLOBALS['correctionCache'][$LatInt.$LonInt];
+    }
+}
 
 /**
  * RD_correction
@@ -395,45 +532,6 @@ function ellips_to_rd($coor, $map) {
 }
 
 /**
- * getRdCorrection
- *
- * @param  mixed $lat
- * @param  mixed $lon
- * @param  mixed $offsetx
- * @param  mixed $offsety
- * @return void
- */
-function getRdCorrection($lat, $lon, $offsetx=null, $offsety=null) {
-    $LatInt=floor($lat/0.0125)*125;
-    $LonInt=floor($lon/0.02)*200;
-
-    if ($offsetx !== null && $offsetx !== 0) {$LatInt+=125;}
-    if ($offsety !== null && $offsety !== 0) {$LonInt+=200;}
-
-    if ($LatInt <500000 || $LatInt>560000 ) return array('LatCor'=>0,'LatCor'=>0, 'Height'=>null);
-    if ($LonInt < 20000 || $LonInt> 80000 ) return array('LatCor'=>0,'LatCor'=>0, 'Height'=>null);
-
-
-    if ( array_key_exists($LatInt.$LonInt, $GLOBALS['correctionCache'])) {
-        return $GLOBALS['correctionCache'][$LatInt.$LonInt];
-    }
-    require_once 'sql.class.php';
-
-    $sqlconn = new sql(DB_SERVER, DB_USER, DB_PASSWORD, DB_DATABASE);
-
-    $where=array();
-    $where['Lat']=$LatInt;
-    $where['Lon']=$LonInt;
-
-    $record=$sqlconn->get1record('rdcorrection',array('Lat','Lon','LatCor','LonCor','Height'), $where);
-
-    $GLOBALS['correctionCache'][$LatInt.$LonInt]=$record;
-
-    return $record;
-}
-
-
-/**
  * NAP_Correction
  *
  * @param  array $pos
@@ -507,7 +605,11 @@ function deg_to_rad($pos) {
     $phi=deg_to_rad1($pos['lat']);
     $labda=deg_to_rad1($pos['lon']);
 
-    return array('lat'=>$phi,'lon'=>$labda);
+    if (isset($pos['h'])) {
+        return array('lat'=>$phi,'lon'=>$labda,'h'=>$pos['h']);
+    } else {
+        return array('lat'=>$phi,'lon'=>$labda);
+    }
 } // deg_to_rad
 
 /**
@@ -518,10 +620,14 @@ function deg_to_rad($pos) {
  */
 function rad_to_deg($pos) {
     
-    $lat=($pos['lat']*180)/pi();
-    $lon=($pos['lon']*180)/pi();
+    $phi=($pos['lat']*180)/pi();
+    $labda=($pos['lon']*180)/pi();
 
-    return array('lat'=>$lat,'lon'=>$lon);
+    if (isset($pos['h'])) {
+        return array('lat'=>$phi,'lon'=>$labda,'h'=>$pos['h']);
+    } else {
+        return array('lat'=>$phi,'lon'=>$labda);
+    }
 } // rad_to_deg
 
 /**
@@ -570,7 +676,7 @@ function geoc_to_ellips($pos, $param) {
         if ($pos['x'] > 0) {
             $phi1 = atan(($pos['z'] + $e2*$Rn*sin($phi))/sqrt(pow($pos['x'],2) + pow($pos['y'],2)));}
         else {
-            if (round($pos['x']*100000000000)/100000000000 == 0 && round($pos['y']*100000000000)/100000000000 == 0 && round($pos['z']*100000000000)/100000000000 >= 0 ) {
+            if (round($pos['x'],11) == 0 && round($pos['y'],11) == 0 && round($pos['z'],11) >= 0 ) {
                 $phi1 = pi()/2;
             } else {
                 $phi1 = -1*pi()/2;
@@ -585,17 +691,66 @@ function geoc_to_ellips($pos, $param) {
     } elseif ($pos['x'] == 0 and $pos['y'] < 0 ) { $labda = -1*pi()/2;       //  -90 degrees;
     } elseif ($pos['x'] == 0 and $pos['y'] == 0 ) { $labda = 0;}
 
-    return array('lat'=>$phi1, 'lon'=>$labda);
+    $h=sqrt(pow($pos['x'],2)+pow($pos['y'],2))*cos($phi1)+$pos['z']*sin($phi1)-$param['a']*sqrt(1-$e2*pow(sin($phi1),2));
+
+    return array('lat'=>$phi1, 'lon'=>$labda, 'h'=>$h);
 } // geoc_to_ellips
 
 /**
+ * helmert_apply_rate
+ *
+ * @param  array $source  Transformation parameters
+ * @param  array $rate    Change rate of the transformation parameters
+ * @param  float $t
+ * @return array Transformation parameters with the change applies
+ */
+function helmert_apply_rate($source, $rate, $t) {
+    $result=array();
+
+    $result['tx']=$source['tx']+$rate['tx']*$t;
+    $result['ty']=$source['ty']+$rate['ty']*$t;
+    $result['tz']=$source['tz']+$rate['tz']*$t;
+    $result['rx']=$source['rx']+$rate['rx']*$t;
+    $result['ry']=$source['ry']+$rate['ry']*$t;
+    $result['rz']=$source['rz']+$rate['rz']*$t;
+    $result['s']=$source['s']+$rate['s']*$t;
+    
+    return $result;
+}
+
+/**
+ * inverse_helmert_param
+ *
+ * @param  array $param  Transformation parameters
+ * @return array Transformation parameters, for the inverse function
+ */
+function inverse_helmert_param($param) {
+    $result=array();
+    $result['tx']=-$param['tx'];
+    $result['ty']=-$param['ty'];
+    $result['tz']=-$param['tz'];
+    $result['rx']=-$param['rx'];
+    $result['ry']=-$param['ry'];
+    $result['rz']=-$param['rz'];
+    $result['s'] =-$param['s'];
+    
+    return $result;
+}
+
+/**
  * helmert
+ * 
+ * Performs a 3D Helmert transformation on geocentric coordinates. 
  *
  * @param  array $source  Geocentric position
- * @param  mixed $param   Transformation parameters
+ * @param  array $param   Transformation parameters
  * @return array Transformed geocentric position
  */
 function helmert($source, $param) {
+    $param['rx']=deg_to_rad1($param['rx']/3600);
+    $param['ry']=deg_to_rad1($param['ry']/3600);
+    $param['rz']=deg_to_rad1($param['rz']/3600);
+
     $s=1+$param['s'];
     $R11=cos($param['rz'])*cos($param['ry']);
     $R12=cos($param['rz'])*sin($param['ry'])*sin($param['rx'])+sin($param['rz'])*cos($param['rx']);
@@ -608,6 +763,7 @@ function helmert($source, $param) {
     $R31=sin($param['ry']);
     $R32=-cos($param['ry'])*sin($param['rx']);
     $R33=cos($param['ry'])*cos($param['rx']);
+
 
     $X=$s*($R11*$source['x']+$R12*$source['y']+$R13*$source['z'])+$param['tx'];
     $Y=$s*($R21*$source['x']+$R22*$source['y']+$R23*$source['z'])+$param['ty'];

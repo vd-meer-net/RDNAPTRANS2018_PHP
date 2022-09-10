@@ -3,24 +3,43 @@
 if (isset($_REQUEST['m'])) {
     include 'rdnaptrans.php';
     if ($_REQUEST['m']==1) {
-        var_dump(rd2etrs(array('x'=>108360.87902938,'y'=>415757.27450621,'h'=>258.00566518823)));
+        $rd=array('x'=>108360.8790,'y'=>415757.2745,'z'=>258.0057);
+        printf ('RD: X: %10.4f, Y: %10.4f, Z: %10.4f<br/>', $rd['x'], $rd['y'], $rd['z']);
+        $etrs89=rd2etrs($rd);
+        printf ('ETRS: lat: %13.9f, lon: %13.9f, H: %10.4f<br/>', $etrs89['lat'], $etrs89['lon'], $etrs89['h']);
+
     } elseif ($_REQUEST['m']==2) {
-        var_dump(etrs2rd(array('lat'=>53.473095072,'lon'=>6.886681267,'h'=>290.4741)));
+        $etrs89=array('lat'=>53.473095072,'lon'=>6.886681267,'h'=>290.4741);
+        printf ('ETRS: lat: %13.9f, lon: %13.9f, H: %10.4f<br/>', $etrs89['lat'], $etrs89['lon'], $etrs89['h']);
+        $rd=etrs2rd($etrs89);
+        printf ('RD: X: %10.4f, Y: %10.4f, Z: %10.4f<br/>', $rd['x'], $rd['y'], $rd['z']);
     } elseif ($_REQUEST['m']==3) {
         SelfValidation();
     } elseif ($_REQUEST['m']==4) {
         ValidateETRS2RD();
     } elseif ($_REQUEST['m']==5) {
         ValidateRD2ETRS();
+    } elseif ($_REQUEST['m']==6) {
+        $etrs89=array('lat'=>51.999994814, 'lon'=>4.999992333, 'h'=>42.9821);
+        printf ('ETRS: lat: %13.9f, lon: %13.9f, H: %10.4f<br/>', $etrs89['lat'], $etrs89['lon'], $etrs89['h']);
+        $itrs=ITRS2ETRS89($etrs89, true, '2020-10-1');
+        printf ('ITRS: lat: %13.9f, lon: %13.9f, H: %10.4f<br/>', $itrs['lat'], $itrs['lon'], $itrs['h']);
+    } elseif ($_REQUEST['m']==7) {
+        $itrs=array('lat'=>52,'lon'=>5,'h'=>43);
+        printf ('ITRS: lat: %13.9f, lon: %13.9f, H: %10.4f<br/>', $itrs['lat'], $itrs['lon'], $itrs['h']);
+        $etrs89=ITRS2ETRS89($itrs, false, '2020-10-1');
+        printf ('ETRS: lat: %13.9f, lon: %13.9f, H: %10.4f<br/>', $etrs89['lat'], $etrs89['lon'], $etrs89['h']);
     }
 } else {
 ?>
 
-<a href="?m=1">Convert 1 demo-coordinate to ETRS89</a></br>
-<a href="?m=2">Convert 1 demo-coordinate to RD</a></br>
+<a href="?m=1">Convert 1 demo-coordinate from RD to ETRS89</a></br>
+<a href="?m=2">Convert 1 demo-coordinate from ETRS89 to RD</a></br>
 <a href="?m=3">Perform selfvalidation</a></br>
 <a href="?m=4">Create validationfile for ETRS2RD</a></br>
 <a href="?m=5">Create validationfile for RD2ETRS</a></br>
+<a href="?m=6">Convert 1 demo-coordinate from ETRS89 to ITRS</a></br>
+<a href="?m=7">Convert 1 demo-coordinate from ITRS to ETRS89</a></br>
 <?php
 }
 
@@ -86,6 +105,11 @@ function ValidateETRS2RD() {
     return;
 }
 
+/**
+ * SelfValidation
+ *
+ * @return void
+ */
 function SelfValidation() {
     $i=1;
     $fout=0;
@@ -105,39 +129,53 @@ function SelfValidation() {
         
         if ($chk) {
             $fout++;
-            $rd=etrs2rd(array('lat'=>$arr[1],'lon'=>$arr[2],'h'=>(double)$arr[3]));
             echo '<tr>';
             printf ('<td>%s X</td>', $i);
 
             printf ('<td>%s</td>', $arr[0]);
-            if (abs($arr[1]-$etrs['lat'])>0.00000001) {
+            if (abs($arr[1]-$etrs['lat'])<0.00000001) {
                 printf ('<td>%12.9f</td>', $etrs['lat']);
+            } elseif (abs($arr[1]-$etrs['lat'])<0.0000001) {
+                printf ('<td><font color="green">%12.9f</font></br>%12.9f</td>', $etrs['lat'],$arr[1]);
             } else {
                 printf ('<td><font color="red">%12.9f</font></br>%12.9f</td>', $etrs['lat'],$arr[1]);
             }
             if (abs($arr[2]-$etrs['lon'])<0.00000001) {
                 printf ('<td>%12.9f</td>', $etrs['lon']);
+            } elseif (abs($arr[2]-$etrs['lon'])<0.0000001) {
+                printf ('<td><font color="green">%12.9f</font></br>%12.9f</td>', $etrs['lon'],$arr[2]);
             } else {
                 printf ('<td><font color="red">%12.9f</font></br>%12.9f</td>', $etrs['lon'],$arr[2]);
             }
-            if (abs((double)$arr[3]-$etrs['h'])<0.001 || substr($arr[6],0,1)=='*') {
+
+            if (abs((double)$arr[3]-$etrs['h'])<0.0001 || substr($arr[6],0,1)=='*') {
                 printf ('<td>%8.4f</td>', $etrs['h']);
+            } elseif (abs((double)$arr[3]-$etrs['h'])<0.001) {
+                printf ('<td><font color="green">%8.4f</font></br>%8.4f</td>', $etrs['h'],$arr[3]);
             } else {
                 printf ('<td><font color="red">%8.4f</font></br>%8.4f</td>', $etrs['h'],$arr[3]);
             }
 
             if (abs($arr[4]-$rd['x'])<0.0001) {
                 printf ('<td>%8.4f</td>', $rd['x']);
+            } elseif (abs($arr[4]-$rd['x'])<0.001) {
+                printf ('<td><font color="green">%8.4f</font></br>%8.4f</td>', $rd['x'],$arr[4]);
             } else {
                 printf ('<td><font color="red">%8.4f</font></br>%8.4f</td>', $rd['x'],$arr[4]);
             }
+
             if (abs($arr[5]-$rd['y'])<0.0001) {
                 printf ('<td>%8.4f</td>', $rd['y']);
+            } elseif (abs($arr[5]-$rd['y'])<0.001) {
+                printf ('<td><font color="green">%8.4f</font></br>%8.4f</td>', $rd['y'],$arr[5]);
             } else {
                 printf ('<td><font color="red">%8.4f</font></br>%8.4f</td>', $rd['y'],$arr[5]);
             }
-            if (abs((double)$arr[6]-$rd['z'])<0.0001) {
+
+            if (abs((double)$arr[6]-$rd['z'])<0.0001 || substr($arr[6],0,1)=='*') {
                 printf ('<td>%8.4f</td>', $rd['z']);
+            } elseif (abs((double)$arr[6]-$rd['z'])<0.001) {
+                printf ('<td><font color="green">%8.4f</font></br>%8.4f</td>', $rd['z'],$arr[6]);
             } else {
                 printf ('<td><font color="red">%8.4f</font></br>%8.4f</td>', $rd['z'],$arr[6]);
             }
